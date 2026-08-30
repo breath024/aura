@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JOURNEY — 스크롤 시네마틱 (눈 · 중세 · 창문 너머)</title>
+<style>
+  /* ===== 2026-06-01 호윤 포폴 : 스크롤 시네마틱 여정 프로토타입 ===== */
+  @font-face{font-family:'Pretendard';src:url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-Regular.woff2') format('woff2');font-weight:400;font-display:swap;}
+  @font-face{font-family:'Pretendard';src:url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-Bold.woff2') format('woff2');font-weight:700;font-display:swap;}
+  @font-face{font-family:'Pretendard';src:url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-Black.woff2') format('woff2');font-weight:900;font-display:swap;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{background:#06070d;font-family:'Pretendard',sans-serif;color:#fff;}
+  body{height:600vh;}                 /* 스크롤 길이 */
+  #scene{position:fixed;inset:0;z-index:1;display:block;}
+
+  .text-layer{position:fixed;inset:0;z-index:2;pointer-events:none;}
+  .beat{position:absolute;left:0;right:0;text-align:center;opacity:0;transition:none;will-change:opacity,transform;}
+  .beat .k{font-size:13px;letter-spacing:8px;font-weight:700;color:#bcd4ff;margin-bottom:18px;text-shadow:0 2px 20px rgba(0,0,0,.8);}
+  .beat .t{font-size:clamp(36px,6vw,76px);font-weight:900;line-height:1.08;letter-spacing:-1px;text-shadow:0 6px 50px rgba(0,0,0,.9);}
+  .beat .s{margin-top:22px;font-size:clamp(15px,1.7vw,19px);opacity:.8;font-weight:400;text-shadow:0 2px 20px rgba(0,0,0,.9);}
+  #beat1{top:42%} #beat2{top:42%} #beat3{top:40%}
+  #beat3 .t{background:linear-gradient(90deg,#ffd9a0,#ff9ec4,#bcd4ff);-webkit-background-clip:text;background-clip:text;color:transparent;}
+
+  .scroll-cue{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);z-index:3;font-size:11px;letter-spacing:3px;
+    color:rgba(255,255,255,.5);text-align:center;transition:opacity .4s;}
+  .scroll-cue .m{width:22px;height:36px;border:1.5px solid rgba(255,255,255,.4);border-radius:12px;margin:0 auto 10px;position:relative;}
+  .scroll-cue .m::after{content:'';position:absolute;left:50%;top:7px;width:3px;height:7px;border-radius:2px;background:#fff;transform:translateX(-50%);animation:wheel 1.4s ease infinite;}
+  @keyframes wheel{0%{opacity:1;top:7px}60%{opacity:0;top:16px}100%{opacity:0}}
+
+  #loader{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:#06070d;
+    transition:opacity .8s;font-size:12px;letter-spacing:5px;color:rgba(255,255,255,.45);}
+  #loader.hide{opacity:0;pointer-events:none;}
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div class="text-layer">
+    <div class="beat" id="beat1">
+      <div class="k">A&nbsp;&nbsp;W I N T E R&nbsp;&nbsp;T A L E</div>
+      <div class="t">고요한 설원의<br>오래된 성</div>
+      <div class="s">햇살이 눈을 비추는 그곳에서 이야기가 시작됩니다.</div>
+    </div>
+    <div class="beat" id="beat2">
+      <div class="k">B E Y O N D&nbsp;&nbsp;T H E&nbsp;&nbsp;W A L L</div>
+      <div class="t">창문 너머,<br>또 다른 세계</div>
+      <div class="s">한 걸음 더 다가가 보세요.</div>
+    </div>
+    <div class="beat" id="beat3">
+      <div class="k">A R R I V A L</div>
+      <div class="t">새로운 풍경이<br>펼쳐집니다</div>
+      <div class="s">스크롤 하나로 떠나는 여정 — 당신의 브랜드를 이렇게.</div>
+    </div>
+  </div>
+
+  <div class="scroll-cue" id="cue"><div class="m"></div>SCROLL</div>
+  <div id="loader">J O U R N E Y</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a0f1e, 0.012);
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 200);
+
+// ===== 유틸 =====
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const smooth=t=>t*t*(3-2*t);
+const range=(p,a,b)=>clamp((p-a)/(b-a),0,1);
+function texFrom(cv){ const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.minFilter=THREE.LinearFilter; return t; }
+function plane(cv,w,h,x,y,z,opts={}){
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),
+    new THREE.MeshBasicMaterial({map:texFrom(cv),transparent:true,depthWrite:false,...opts}));
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+
+// ===== 절차적 아트 (임시 — 나중에 진짜 이미지로 교체) =====
+function C(w,h){ const c=document.createElement('canvas'); c.width=w;c.height=h; return c; }
+
+function skyCv(){ const c=C(2048,1024),x=c.getContext('2d');
+  const g=x.createLinearGradient(0,0,0,1024);
+  g.addColorStop(0,'#0b1430'); g.addColorStop(.5,'#1c2f5e'); g.addColorStop(.8,'#3a5a8c'); g.addColorStop(1,'#cfe0f0');
+  x.fillStyle=g; x.fillRect(0,0,2048,1024);
+  const sun=x.createRadialGradient(1500,300,20,1500,300,520);
+  sun.addColorStop(0,'rgba(255,240,210,.95)'); sun.addColorStop(.4,'rgba(255,220,170,.4)'); sun.addColorStop(1,'rgba(255,220,170,0)');
+  x.fillStyle=sun; x.fillRect(0,0,2048,1024); return c; }
+
+function castleCv(){ const c=C(2048,1024),x=c.getContext('2d'); x.clearRect(0,0,2048,1024);
+  x.fillStyle='#0c1426';
+  // 멀리 능선
+  x.beginPath(); x.moveTo(0,760); for(let i=0;i<=2048;i+=40){ x.lineTo(i,720+Math.sin(i*0.01)*40); } x.lineTo(2048,1024); x.lineTo(0,1024); x.fill();
+  // 성 실루엣
+  x.fillStyle='#0a1020';
+  function tower(bx,bw,bh){ x.fillRect(bx,1024-bh,bw,bh);
+    for(let k=0;k<bw;k+=bw/4){ x.fillRect(bx+k,1024-bh-18,bw/8,18);} }
+  tower(820,90,330); tower(960,150,430); tower(1140,70,300);
+  x.fillRect(820,694,390,40);
+  return c; }
+
+function foreCv(){ const c=C(2048,1024),x=c.getContext('2d'); x.clearRect(0,0,2048,1024);
+  x.fillStyle='#060a14';
+  x.beginPath(); x.moveTo(0,1024); x.lineTo(0,860);
+  for(let i=0;i<=2048;i+=30){ x.lineTo(i,820+Math.sin(i*0.02)*60); } x.lineTo(2048,1024); x.fill();
+  // 눈더미 하이라이트
+  x.fillStyle='rgba(200,220,255,.08)';
+  x.beginPath(); x.moveTo(0,1024); x.lineTo(0,880); for(let i=0;i<=2048;i+=30){ x.lineTo(i,840+Math.sin(i*0.02)*60);} x.lineTo(2048,1024); x.fill();
+  return c; }
+
+function windowCv(){ const c=C(1024,1500),x=c.getContext('2d');
+  // 돌 프레임
+  x.fillStyle='#2a2740'; x.fillRect(0,0,1024,1500);
+  // 가운데 아치형 구멍 뚫기 (투명)
+  x.globalCompositeOperation='destination-out';
+  const cx=512, top=180, w=620, h=1120;
+  x.beginPath();
+  x.moveTo(cx-w/2, top+w/2);
+  x.arc(cx, top+w/2, w/2, Math.PI, 0); // 아치 윗부분
+  x.lineTo(cx+w/2, top+h);
+  x.lineTo(cx-w/2, top+h);
+  x.closePath(); x.fill();
+  x.globalCompositeOperation='source-over';
+  // 돌 질감/하이라이트
+  x.strokeStyle='rgba(255,255,255,.06)'; x.lineWidth=8;
+  for(let i=0;i<1500;i+=60){ x.beginPath(); x.moveTo(0,i); x.lineTo(1024,i+20); x.stroke(); }
+  // 창틀 십자
+  x.fillStyle='#2a2740';
+  x.fillRect(cx-18, top, 36, h);
+  x.fillRect(cx-w/2, top+h*0.5, w, 32);
+  return c; }
+
+function landscapeCv(){ const c=C(2048,1024),x=c.getContext('2d');
+  const g=x.createLinearGradient(0,0,0,1024);
+  g.addColorStop(0,'#ffd9a0'); g.addColorStop(.4,'#ffb27a'); g.addColorStop(.7,'#c98fb0'); g.addColorStop(1,'#6a7fae');
+  x.fillStyle=g; x.fillRect(0,0,2048,1024);
+  const sun=x.createRadialGradient(1024,420,10,1024,420,360);
+  sun.addColorStop(0,'rgba(255,255,240,1)'); sun.addColorStop(1,'rgba(255,255,240,0)');
+  x.fillStyle=sun; x.fillRect(0,0,2048,1024);
+  // 산
+  const cols=['#9a86b8','#7a6aa0','#574b80'];
+  for(let l=0;l<3;l++){ x.fillStyle=cols[l]; x.beginPath(); x.moveTo(0,1024);
+    const base=560+l*150; for(let i=0;i<=2048;i+=60){ x.lineTo(i, base+Math.sin(i*0.006+l*2)*90 - l*30);} x.lineTo(2048,1024); x.fill(); }
+  return c; }
+
+// ===== 레이어 배치 =====
+// 씬 A (출발) : x≈0 주변, 카메라 시작 z=14
+const L = {};
+L.sky    = plane(skyCv(),      120, 60, 0, 6, -45, {depthTest:false});
+L.castle = plane(castleCv(),    90, 45, 0, 2, -26);
+L.fore   = plane(foreCv(),     120, 60, 0,-6, -10);
+// 창문 (정면 z 통과 대상)
+L.window = plane(windowCv(),    18, 26, 0, 0, -16);
+// 풍경 (창문 너머)
+L.land   = plane(landscapeCv(),140, 70, 0, 4, -60, {depthTest:false});
+L.land.material.opacity = 0;     // 처음엔 숨김
+
+// ===== 진짜 사진으로 교체 (images 폴더에 파일 넣으면 자동 적용) =====
+// 파일 없으면 위의 임시 그림이 그대로 유지됨. 넣고 새로고침하면 교체됨.
+function swapImage(mesh, path){
+  const img = new Image();
+  img.onload = ()=>{ const t=new THREE.Texture(img); t.colorSpace=THREE.SRGBColorSpace;
+    t.minFilter=THREE.LinearFilter; t.needsUpdate=true;
+    mesh.material.map = t; mesh.material.needsUpdate=true;
+    console.log('[교체됨]', path, img.width+'x'+img.height); };
+  img.onerror = ()=>{ /* 파일 없음 → 임시 그림 유지 */ };
+  img.src = path + '?v=' + Date.now();   // 캐시 무시(새 파일 바로 반영)
+}
+swapImage(L.sky,    'images/sky.jpg');     // 하늘/배경  (직사각형, ~2:1)
+swapImage(L.castle, 'images/castle.png');  // 성/실루엣  (PNG, 배경 투명)
+swapImage(L.fore,   'images/fore.png');    // 앞 풍경    (PNG, 배경 투명)
+swapImage(L.window, 'images/window.png');  // 창문 프레임 (PNG, ★가운데 투명★)
+swapImage(L.land,   'images/land.jpg');    // 창문 너머 풍경 (직사각형, ~2:1)
+
+// ===== 눈 =====
+const SN=2200, sp=new Float32Array(SN*3);
+for(let i=0;i<SN;i++){ sp[i*3]=(Math.random()-0.5)*80; sp[i*3+1]=Math.random()*60-10; sp[i*3+2]=(Math.random()-0.5)*60 - 10; }
+const sg=new THREE.BufferGeometry(); sg.setAttribute('position',new THREE.BufferAttribute(sp,3));
+const snow=new THREE.Points(sg,new THREE.PointsMaterial({color:0xffffff,size:0.16,transparent:true,opacity:.85,depthWrite:false}));
+scene.add(snow);
+
+// ===== 갓레이 (햇살) =====
+function rayCv(){ const c=C(256,1024),x=c.getContext('2d'); const g=x.createLinearGradient(0,0,0,1024);
+  g.addColorStop(0,'rgba(255,240,200,.0)'); g.addColorStop(.5,'rgba(255,240,200,.5)'); g.addColorStop(1,'rgba(255,240,200,0)');
+  x.fillStyle=g; x.fillRect(0,0,256,1024); return c; }
+const rays=[];
+for(let i=0;i<5;i++){ const r=plane(rayCv(), 5+i*1.5, 60, 6+i*1.6, 8, -24+i, {blending:THREE.AdditiveBlending});
+  r.rotation.z=0.35; r.material.opacity=0.5; rays.push(r); }
+
+// ===== 스크롤 진행 =====
+let pTarget=0, p=0;
+function onScroll(){ const max=document.body.scrollHeight-innerHeight; pTarget=clamp(scrollY/max,0,1); }
+addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+// 마우스 패럴랙스
+const mouse=new THREE.Vector2(0,0), mt=new THREE.Vector2(0,0);
+addEventListener('pointermove',e=>{ mt.x=(e.clientX/innerWidth)*2-1; mt.y=-((e.clientY/innerHeight)*2-1); });
+
+const beats=[document.getElementById('beat1'),document.getElementById('beat2'),document.getElementById('beat3')];
+function setBeat(el, vis, slide){ el.style.opacity=vis.toFixed(3); el.style.transform=`translateY(${slide}px)`; }
+
+const clock=new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),0.05); const t=clock.elapsedTime;
+  p += (pTarget-p)*0.07;
+  mouse.lerp(mt,0.05);
+
+  // --- 카메라 경로 ---
+  // 0~0.35 : 설원/성 도입 (살짝 dolly)
+  // 0.35~0.62 : 왼쪽으로 팬하며 창문이 정면에 (여긴 정면 유지 + 전진 준비)
+  // 0.62~1 : 창문을 향해 전진 → 통과 → 풍경
+  const dolly = lerp(14, -2, smooth(range(p,0,0.62)));      // z 전진
+  const through = smooth(range(p,0.62,1));                  // 창문 통과 구간
+  const camZ = lerp(dolly, -34, through);                   // 마지막에 깊숙이 통과
+  const camX = lerp(0, -3.0, smooth(range(p,0.3,0.6)))*(1-through); // 중간 팬 후 정렬
+  camera.position.set(camX + mouse.x*1.2, mouse.y*0.8, camZ);
+  camera.lookAt(camX*0.3, 0, camZ-10);
+
+  // --- 레이어 페이드/연출 ---
+  // 씬 A는 창문 통과하며 사라짐
+  const fadeA = 1 - smooth(range(p,0.6,0.85));
+  L.castle.material.opacity = fadeA;
+  L.fore.material.opacity   = 1 - smooth(range(p,0.7,0.95));
+  L.sky.material.opacity    = lerp(1, 0, smooth(range(p,0.55,0.9)));
+  rays.forEach(r=> r.material.opacity = 0.5*fadeA);
+  // 창문은 다가갈수록 또렷, 통과하면 사라짐
+  L.window.material.opacity = smooth(range(p,0.2,0.45)) * (1 - smooth(range(p,0.7,0.82)));
+  L.window.position.z = lerp(-16, -16, 1); // 고정 (카메라가 통과)
+  // 풍경 등장
+  L.land.material.opacity = smooth(range(p,0.55,0.9));
+
+  // --- 눈 (통과 후 잦아듦) ---
+  const sa=sg.attributes.position.array;
+  for(let i=0;i<SN;i++){ sa[i*3+1]-=(2+ (i%5))*dt; sa[i*3]+=Math.sin(t+i)*0.004;
+    if(sa[i*3+1]<-14){ sa[i*3+1]=46; } }
+  sg.attributes.position.needsUpdate=true;
+  snow.position.z = camZ;                 // 카메라 따라 눈밭 유지
+  snow.material.opacity = 0.85*(1-through);
+
+  // --- 텍스트 비트 ---
+  const v1 = range(p,0.02,0.1)*(1-range(p,0.22,0.32));
+  const v2 = range(p,0.36,0.45)*(1-range(p,0.55,0.62));
+  const v3 = range(p,0.84,0.93);
+  setBeat(beats[0], v1, (1-v1)*30);
+  setBeat(beats[1], v2, (1-v2)*30);
+  setBeat(beats[2], v3, (1-v3)*30);
+
+  document.getElementById('cue').style.opacity = (p<0.05)?'1':'0';
+  renderer.render(scene,camera);
+}
+animate();
+
+addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+addEventListener('load',()=> setTimeout(()=>document.getElementById('loader').classList.add('hide'),500));
+</script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DEPTH — 살아나는 사진</title>
+<style>
+  /* ===== 2026-06-01 호윤 포폴 : 깊이맵 패럴랙스 (A안) ===== */
+  @font-face{font-family:'Pretendard';src:url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-Regular.woff2') format('woff2');font-weight:400;font-display:swap;}
+  @font-face{font-family:'Pretendard';src:url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-Bold.woff2') format('woff2');font-weight:700;font-display:swap;}
+  @font-face{font-family:'Pretendard';src:url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-Black.woff2') format('woff2');font-weight:900;font-display:swap;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;background:#05060a;font-family:'Pretendard',sans-serif;color:#fff;}
+  #scene{position:fixed;inset:0;z-index:1;display:block;}
+
+  .ui{position:fixed;inset:0;z-index:2;pointer-events:none;}
+  .brand{position:absolute;top:30px;left:40px;font-weight:900;letter-spacing:5px;font-size:20px;
+    text-shadow:0 2px 30px rgba(0,0,0,.9);}
+  .brand small{display:block;font-weight:400;letter-spacing:3px;font-size:11px;opacity:.55;margin-top:6px;}
+
+  .panel{position:absolute;left:50%;bottom:32px;transform:translateX(-50%);
+    display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:18px;
+    background:rgba(18,20,30,.55);border:1px solid rgba(255,255,255,.12);
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);pointer-events:auto;
+    box-shadow:0 18px 60px rgba(0,0,0,.5);}
+  .slot{position:relative;}
+  .slot label{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    width:120px;height:64px;border-radius:12px;cursor:pointer;font-size:12px;font-weight:700;
+    border:1.5px dashed rgba(255,255,255,.25);color:rgba(255,255,255,.8);transition:.25s;text-align:center;}
+  .slot label:hover{border-color:#7af6ff;color:#7af6ff;background:rgba(122,246,255,.06);}
+  .slot label .sub{font-weight:400;font-size:10px;opacity:.55;}
+  .slot.filled label{border-style:solid;border-color:#7af6ff;color:#7af6ff;}
+  .slot input{display:none;}
+  .ctrl{display:flex;flex-direction:column;gap:6px;padding:0 8px;font-size:11px;color:rgba(255,255,255,.6);}
+  .ctrl input[type=range]{width:130px;accent-color:#7af6ff;}
+  .sep{width:1px;height:48px;background:rgba(255,255,255,.12);}
+
+  .hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
+    pointer-events:none;transition:opacity .5s;}
+  .hint .big{font-size:clamp(28px,5vw,52px);font-weight:900;letter-spacing:-1px;
+    text-shadow:0 4px 40px rgba(0,0,0,.8);}
+  .hint .small{margin-top:14px;font-size:15px;opacity:.6;}
+  .hint.gone{opacity:0;}
+
+  .badge{position:absolute;top:30px;right:40px;font-size:11px;letter-spacing:2px;opacity:.5;text-align:right;line-height:1.7;}
+  .badge a{color:#7af6ff;text-decoration:none;pointer-events:auto;}
+
+  #drophint{position:fixed;inset:14px;z-index:5;border:2px dashed #7af6ff;border-radius:20px;
+    background:rgba(122,246,255,.08);display:none;place-items:center;font-size:20px;font-weight:700;
+    color:#7af6ff;backdrop-filter:blur(2px);}
+  #drophint.show{display:grid;}
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div class="ui">
+    <div class="brand">DEPTH<small>살아나는 사진 · MOVE YOUR MOUSE</small></div>
+    <div class="badge">3D DEPTH PARALLAX<br><a href="https://convert.leiapix.com" target="_blank">깊이맵 만들기 →</a></div>
+
+    <div class="hint" id="hint">
+      <div class="big">사진을 끌어다 놓으세요</div>
+      <div class="small">또는 아래에서 선택 · 깊이맵까지 넣으면 진짜 입체가 됩니다</div>
+    </div>
+
+    <div class="panel">
+      <div class="slot" id="slotImg">
+        <label for="fileImg">🖼 사진<span class="sub">필수</span></label>
+        <input type="file" id="fileImg" accept="image/*" />
+      </div>
+      <div class="slot" id="slotDepth">
+        <label for="fileDepth">🌓 깊이맵<span class="sub">선택 · 강력추천</span></label>
+        <input type="file" id="fileDepth" accept="image/*" />
+      </div>
+      <div class="sep"></div>
+      <div class="ctrl">
+        <span>입체 강도</span>
+        <input type="range" id="strength" min="0" max="100" value="35" />
+      </div>
+    </div>
+  </div>
+
+  <div id="drophint">여기에 놓으세요</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1,1,1,-1,0,10);
+camera.position.z = 1;
+
+// ---- 기본(데모) 텍스처 : 그라데이션 사진 + 방사형 깊이맵 ----
+function gradientCanvas(){
+  const c=document.createElement('canvas'); c.width=1600; c.height=1000; const x=c.getContext('2d');
+  const g=x.createLinearGradient(0,0,1600,1000);
+  g.addColorStop(0,'#1b2a6b'); g.addColorStop(.5,'#5b2a86'); g.addColorStop(1,'#c0306b');
+  x.fillStyle=g; x.fillRect(0,0,1600,1000);
+  x.fillStyle='rgba(255,255,255,.9)'; x.font='900 90px Pretendard,sans-serif'; x.textAlign='center';
+  x.fillText('DROP A PHOTO', 800, 520);
+  return c;
+}
+// 방사형 깊이맵 (중앙=가까움(흰), 가장자리=멈(검)) — 사진만 있을 때 자동 사용
+function radialDepthCanvas(){
+  const c=document.createElement('canvas'); c.width=1024; c.height=1024; const x=c.getContext('2d');
+  const g=x.createRadialGradient(512,512,80,512,512,720);
+  g.addColorStop(0,'#ffffff'); g.addColorStop(1,'#000000');
+  x.fillStyle='#000'; x.fillRect(0,0,1024,1024); x.fillStyle=g; x.fillRect(0,0,1024,1024);
+  return c;
+}
+function texFromCanvasOrImg(src, srgb){
+  const t = new THREE.Texture(src);
+  t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = false; t.needsUpdate = true;
+  return t;
+}
+
+const uniforms = {
+  uImage:      { value: texFromCanvasOrImg(gradientCanvas(), true) },
+  uDepth:      { value: texFromCanvasOrImg(radialDepthCanvas(), false) },
+  uMouse:      { value: new THREE.Vector2(0,0) },
+  uStrength:   { value: 0.035 },
+  uImgAspect:  { value: 1.6 },
+  uViewAspect: { value: innerWidth/innerHeight },
+  uZoom:       { value: 1.12 },
+};
+
+const mat = new THREE.ShaderMaterial({
+  uniforms,
+  vertexShader:`
+    varying vec2 vUv;
+    void main(){ vUv = uv; gl_Position = vec4(position.xy,0.0,1.0); }`,
+  fragmentShader:`
+    precision highp float;
+    uniform sampler2D uImage; uniform sampler2D uDepth;
+    uniform vec2 uMouse; uniform float uStrength;
+    uniform float uImgAspect; uniform float uViewAspect; uniform float uZoom;
+    varying vec2 vUv;
+    void main(){
+      // background-size: cover
+      vec2 uv = vUv;
+      if(uViewAspect > uImgAspect) uv.y = (uv.y-0.5)*(uImgAspect/uViewAspect)+0.5;
+      else                          uv.x = (uv.x-0.5)*(uViewAspect/uImgAspect)+0.5;
+      // 살짝 줌인 (밀림 가장자리 가리기)
+      uv = (uv-0.5)/uZoom + 0.5;
+      // 깊이 기반 다중 샘플 (부드럽게)
+      float d = texture2D(uDepth, uv).r;
+      vec2 off = uMouse * (d - 0.45) * uStrength;
+      vec3 col = texture2D(uImage, uv + off).rgb;
+      // 비네팅 살짝
+      float vig = smoothstep(1.25, 0.35, length(vUv-0.5));
+      col *= mix(0.78, 1.0, vig);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+});
+scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), mat));
+
+// ---- 인터랙션 ----
+const target = new THREE.Vector2(0,0);
+addEventListener('pointermove', e=>{
+  target.x = (e.clientX/innerWidth)*2-1;
+  target.y = -((e.clientY/innerHeight)*2-1);
+});
+let drift = 0;
+function animate(){
+  requestAnimationFrame(animate);
+  drift += 0.01;
+  // 입력 없을 때도 은은히 떠다니게
+  const ax = target.x + Math.sin(drift)*0.12;
+  const ay = target.y + Math.cos(drift*0.8)*0.08;
+  uniforms.uMouse.value.x += (ax - uniforms.uMouse.value.x)*0.06;
+  uniforms.uMouse.value.y += (ay - uniforms.uMouse.value.y)*0.06;
+  renderer.render(scene, camera);
+}
+animate();
+
+addEventListener('resize', ()=>{
+  renderer.setSize(innerWidth, innerHeight);
+  uniforms.uViewAspect.value = innerWidth/innerHeight;
+});
+
+// ---- 파일 로딩 ----
+const hint = document.getElementById('hint');
+function loadImageFile(file, isDepth){
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = ()=>{
+    const tex = texFromCanvasOrImg(img, !isDepth);
+    if(isDepth){
+      uniforms.uDepth.value = tex;
+      document.getElementById('slotDepth').classList.add('filled');
+    }else{
+      uniforms.uImage.value = tex;
+      uniforms.uImgAspect.value = img.width/img.height;
+      document.getElementById('slotImg').classList.add('filled');
+      hint.classList.add('gone');
+    }
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+document.getElementById('fileImg').addEventListener('change', e=> e.target.files[0] && loadImageFile(e.target.files[0], false));
+document.getElementById('fileDepth').addEventListener('change', e=> e.target.files[0] && loadImageFile(e.target.files[0], true));
+
+// 전체 화면 드래그&드롭
+const dh = document.getElementById('drophint');
+let dragCount = 0;
+addEventListener('dragenter', e=>{ e.preventDefault(); dragCount++; dh.classList.add('show'); });
+addEventListener('dragover', e=> e.preventDefault());
+addEventListener('dragleave', e=>{ dragCount--; if(dragCount<=0) dh.classList.remove('show'); });
+addEventListener('drop', e=>{
+  e.preventDefault(); dragCount=0; dh.classList.remove('show');
+  const files=[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/'));
+  files.forEach(f=>{
+    const isDepth = /depth|깊이|disp|mask/i.test(f.name);
+    loadImageFile(f, isDepth);
+  });
+});
+
+// 강도 슬라이더
+document.getElementById('strength').addEventListener('input', e=>{
+  uniforms.uStrength.value = (e.target.value/100)*0.09;
+});
+</script>
+</body>
+</html>

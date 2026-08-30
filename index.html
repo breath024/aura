@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AURA — 살아있는 AI</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<style>
+  /* ===== 2026-06-01 호윤 포폴 : AURA 히어로 프로토타입 ===== */
+  @font-face {
+    font-family: 'Pretendard';
+    src: url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-Regular.woff2') format('woff2');
+    font-weight: 400; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Pretendard';
+    src: url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-Bold.woff2') format('woff2');
+    font-weight: 700; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Pretendard';
+    src: url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-Black.woff2') format('woff2');
+    font-weight: 900; font-display: swap;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Pretendard', -apple-system, sans-serif;
+    background: radial-gradient(ellipse at 50% 35%, #14102b 0%, #0a0717 55%, #050309 100%);
+    color: #fff;
+    cursor: none;
+  }
+
+  #scene { position: fixed; inset: 0; z-index: 1; }
+
+  /* ===== UI 오버레이 ===== */
+  .overlay { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+
+  .top-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 32px 48px;
+  }
+  .logo {
+    font-weight: 900; font-size: 22px; letter-spacing: 4px;
+    background: linear-gradient(90deg, #7af6ff, #b388ff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .nav { display: flex; gap: 34px; font-size: 14px; font-weight: 400; opacity: .65; }
+  .nav span { transition: opacity .3s; }
+
+  .hero-center {
+    position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
+    text-align: center;
+  }
+  .hero-center::before {
+    content: ''; position: absolute; inset: -60% -20%; z-index: -1;
+    background: radial-gradient(ellipse at center, rgba(5,3,15,.82) 0%, rgba(5,3,15,.4) 45%, rgba(5,3,15,0) 72%);
+  }
+  .kicker {
+    font-size: 13px; letter-spacing: 8px; font-weight: 700;
+    color: #7af6ff; opacity: 0; margin-bottom: 22px;
+    text-shadow: 0 0 20px rgba(122,246,255,.6);
+    animation: rise 1s ease .3s forwards;
+  }
+  .title {
+    font-size: clamp(44px, 8vw, 104px); font-weight: 900; line-height: 1.02;
+    letter-spacing: -2px; text-shadow: 0 4px 40px rgba(0,0,0,.9), 0 2px 12px rgba(0,0,0,.8);
+  }
+  .title .l1 { opacity: 0; animation: rise 1s cubic-bezier(.2,.8,.2,1) .55s forwards; }
+  .title .l2 {
+    opacity: 0; animation: rise 1s cubic-bezier(.2,.8,.2,1) .75s forwards;
+    background: linear-gradient(90deg, #7af6ff 0%, #b388ff 50%, #ff7ae0 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .subtitle {
+    margin-top: 28px; font-size: clamp(15px,1.6vw,19px); font-weight: 400;
+    opacity: 0; color: rgba(255,255,255,.78); letter-spacing: .5px;
+    text-shadow: 0 2px 20px rgba(0,0,0,.9);
+    animation: rise 1s ease 1s forwards;
+  }
+
+  /* 가짜 입력 pill (다음 단계에서 진짜 챗봇으로) */
+  .ask-pill {
+    position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 16px 16px 26px; min-width: 380px;
+    border-radius: 100px; pointer-events: auto; cursor: pointer;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.12);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    opacity: 0; animation: rise 1s ease 1.25s forwards;
+    transition: border-color .3s, background .3s, transform .3s;
+  }
+  .ask-pill:hover { border-color: rgba(122,246,255,.5); background: rgba(255,255,255,.08); transform: translateX(-50%) translateY(-2px); }
+  .ask-pill .ph { font-size: 15px; color: rgba(255,255,255,.5); }
+  .ask-pill .send {
+    width: 38px; height: 38px; border-radius: 50%;
+    display: grid; place-items: center; margin-left: auto;
+    background: linear-gradient(135deg, #7af6ff, #b388ff);
+    box-shadow: 0 0 24px rgba(122,246,255,.5);
+  }
+  .ask-pill .send svg { width: 18px; height: 18px; }
+
+  .scroll-hint {
+    position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%);
+    font-size: 11px; letter-spacing: 3px; opacity: 0;
+    color: rgba(255,255,255,.35); animation: rise 1s ease 1.5s forwards;
+  }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+  .title .l1, .title .l2, .subtitle, .ask-pill, .scroll-hint, .kicker { will-change: transform, opacity; }
+
+  /* 커스텀 커서 */
+  #cursor {
+    position: fixed; z-index: 9; width: 26px; height: 26px; border-radius: 50%;
+    border: 1.5px solid rgba(122,246,255,.8); pointer-events: none;
+    transform: translate(-50%,-50%); transition: width .2s, height .2s, background .2s;
+    mix-blend-mode: screen;
+  }
+  #cursor.hot { width: 46px; height: 46px; background: rgba(122,246,255,.12); }
+
+  /* 로딩 */
+  #loader {
+    position: fixed; inset: 0; z-index: 20; display: grid; place-items: center;
+    background: #050309; transition: opacity .8s ease; font-size: 12px;
+    letter-spacing: 4px; color: rgba(255,255,255,.4);
+  }
+  #loader.hide { opacity: 0; pointer-events: none; }
+
+  @media (max-width: 600px) {
+    body { cursor: auto; } #cursor { display: none; }
+    .nav { display: none; } .top-bar { padding: 22px; }
+    .ask-pill { min-width: unset; width: calc(100% - 44px); }
+  }
+</style>
+</head>
+<body>
+  <div id="loader">A U R A</div>
+  <canvas id="scene"></canvas>
+  <div id="cursor"></div>
+
+  <div class="overlay">
+    <div class="top-bar">
+      <div class="logo">AURA</div>
+      <div class="nav"><span>제품</span><span>기술</span><span>문의</span></div>
+    </div>
+
+    <div class="hero-center">
+      <div class="kicker">A I&nbsp;&nbsp;&nbsp;A S S I S T A N T</div>
+      <h1 class="title">
+        <div class="l1">말을 거는 순간,</div>
+        <div class="l2">살아납니다.</div>
+      </h1>
+      <p class="subtitle">생각하고, 반응하고, 함께 만드는 AI. 당신만의 어시스턴트를 만나보세요.</p>
+    </div>
+
+    <div class="ask-pill" id="askPill">
+      <span class="ph">무엇이든 물어보세요…</span>
+      <span class="send">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#0a0717" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+    </div>
+
+    <div class="scroll-hint">SCROLL TO EXPLORE</div>
+  </div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+// ============ 기본 셋업 ============
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(0, 0, 5.2);
+
+// ============ 발광 오브 (셰이더) ============
+const noiseGLSL = `
+vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C=vec2(1.0/6.0,1.0/3.0); const vec4 D=vec4(0.0,0.5,1.0,2.0);
+  vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.0-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy;
+  i=mod289(i);
+  vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
+  float n_=0.142857142857; vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.0*floor(p*ns.z*ns.z);
+  vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.0*x_);
+  vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.0-abs(x)-abs(y);
+  vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.0+1.0; vec4 s1=floor(b1)*2.0+1.0; vec4 sh=-step(h,vec4(0.0));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+  vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0); m=m*m;
+  return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}`;
+
+const uniforms = {
+  uTime:   { value: 0 },
+  uAmp:    { value: 0.18 },
+  uFreq:   { value: 1.4 },
+  uColorA: { value: new THREE.Color('#3b1f8a') },
+  uColorB: { value: new THREE.Color('#7af6ff') },
+  uColorC: { value: new THREE.Color('#ff5ae0') },
+};
+
+const orbMat = new THREE.ShaderMaterial({
+  uniforms,
+  vertexShader: noiseGLSL + `
+    uniform float uTime; uniform float uAmp; uniform float uFreq;
+    varying float vDisp; varying vec3 vNormal; varying vec3 vView;
+    void main(){
+      float n  = snoise(position*uFreq + uTime*0.35);
+      float n2 = snoise(position*uFreq*2.1 + uTime*0.55)*0.45;
+      float disp = (n + n2)*uAmp;
+      vDisp = disp;
+      vec3 pos = position + normal*disp;
+      vNormal = normalize(normalMatrix*normal);
+      vec4 mv = modelViewMatrix*vec4(pos,1.0);
+      vView = -mv.xyz;
+      gl_Position = projectionMatrix*mv;
+    }`,
+  fragmentShader: `
+    uniform vec3 uColorA; uniform vec3 uColorB; uniform vec3 uColorC; uniform float uTime;
+    varying float vDisp; varying vec3 vNormal; varying vec3 vView;
+    void main(){
+      vec3 vd = normalize(vView);
+      float fres = pow(1.0 - max(dot(vd, normalize(vNormal)),0.0), 2.3);
+      vec3 glow = mix(uColorB, uColorC, 0.5+0.5*sin(uTime*0.6));
+      vec3 base = mix(uColorA, uColorB, smoothstep(-0.25,0.28,vDisp));
+      vec3 col = base + fres*glow*2.6;
+      gl_FragColor = vec4(col,1.0);
+    }`,
+});
+
+const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(1.25, 48), orbMat);
+scene.add(orb);
+
+// 내부 코어 (은은한 발광 중심)
+const core = new THREE.Mesh(
+  new THREE.IcosahedronGeometry(0.95, 6),
+  new THREE.MeshBasicMaterial({ color: '#b388ff', transparent: true, opacity: 0.25 })
+);
+scene.add(core);
+
+// ============ 파티클 (깊이감) ============
+const pCount = 1400;
+const pPos = new Float32Array(pCount*3);
+for (let i=0;i<pCount;i++){
+  const r = 6 + Math.random()*16;
+  const t = Math.random()*Math.PI*2, ph = Math.acos(2*Math.random()-1);
+  pPos[i*3]   = r*Math.sin(ph)*Math.cos(t);
+  pPos[i*3+1] = r*Math.sin(ph)*Math.sin(t);
+  pPos[i*3+2] = r*Math.cos(ph);
+}
+const pGeo = new THREE.BufferGeometry();
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos,3));
+const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({
+  size: 0.035, color: '#9fd8ff', transparent: true, opacity: 0.55,
+  blending: THREE.AdditiveBlending, depthWrite: false
+}));
+scene.add(particles);
+
+// ============ 블룸(네온 글로우) ============
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.7, 0.5, 0.05);
+composer.addPass(bloom);
+
+// ============ 인터랙션 ============
+const mouse = new THREE.Vector2(0,0);
+const target = new THREE.Vector2(0,0);
+let energy = 0;              // 마우스 움직임 → 오브 활성도
+let lastX = 0, lastY = 0;
+
+const cursor = document.getElementById('cursor');
+addEventListener('pointermove', (e)=>{
+  target.x = (e.clientX/innerWidth)*2 - 1;
+  target.y = -((e.clientY/innerHeight)*2 - 1);
+  energy = Math.min(energy + Math.hypot(e.clientX-lastX, e.clientY-lastY)*0.012, 1.6);
+  lastX = e.clientX; lastY = e.clientY;
+  cursor.style.left = e.clientX+'px'; cursor.style.top = e.clientY+'px';
+});
+
+const askPill = document.getElementById('askPill');
+askPill.addEventListener('mouseenter', ()=> cursor.classList.add('hot'));
+askPill.addEventListener('mouseleave', ()=> cursor.classList.remove('hot'));
+askPill.addEventListener('click', ()=>{
+  // 다음 단계: 진짜 챗봇 열기. 지금은 오브 폭발 반응만.
+  energy = 1.6;
+});
+
+// ============ 루프 ============
+const clock = new THREE.Clock();
+let intro = 0;
+function animate(){
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  const dt = clock.getDelta();
+
+  intro = Math.min(intro + 0.012, 1);
+  const ease = 1 - Math.pow(1-intro, 3);
+
+  mouse.lerp(target, 0.05);
+  energy *= 0.94;
+
+  uniforms.uTime.value = t;
+  uniforms.uAmp.value = 0.16 + energy*0.22 + Math.sin(t*1.5)*0.015;
+
+  const s = ease*(1 + energy*0.06);
+  orb.scale.setScalar(s); core.scale.setScalar(s);
+  orb.rotation.y += 0.0016 + mouse.x*0.004;
+  orb.rotation.x = mouse.y*0.3;
+  core.rotation.y -= 0.003;
+
+  // 카메라 패럴랙스
+  camera.position.x += (mouse.x*0.6 - camera.position.x)*0.04;
+  camera.position.y += (mouse.y*0.4 - camera.position.y)*0.04;
+  camera.lookAt(0,0,0);
+
+  particles.rotation.y += 0.0004;
+  particles.rotation.x += 0.0002;
+
+  composer.render();
+}
+animate();
+
+// ============ 리사이즈 / 로더 ============
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+
+addEventListener('load', ()=> setTimeout(()=> document.getElementById('loader').classList.add('hide'), 400));
+</script>
+</body>
+</html>
