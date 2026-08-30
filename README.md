@@ -5,6 +5,22 @@
 프리랜서 프로필에 걸 쇼케이스용으로 시작했다. 인스타 릴스에서 본,
 여러 이미지를 깊이별로 이어붙여 2.5D처럼 움직이는 효과를 웹에서 재현해보려던 것이다.
 
+## 화면
+
+`journey.html` — 스크롤에 따라 새벽 성에서 창문을 지나 밝은 풍경으로 넘어간다.
+
+![journey 시작](docs/journey-castle.png)
+
+![journey 후반](docs/journey-land.png)
+
+접은 실험 둘. `index.html`의 발광 오브와 `tile-grid.html`의 3D 타일 그리드.
+
+![오브](docs/orb.png)
+
+![타일 그리드](docs/tile-grid.png)
+
+넷 다 `images/`를 비워둔 상태로 찍었다. 사진 대신 대체 도형이 들어간 화면이다.
+
 ## 파일
 
 | 파일 | 내용 |
